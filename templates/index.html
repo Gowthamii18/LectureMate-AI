@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LectureMate AI — Smart Lecture Companion</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="#"><span class="brand-icon">✦</span> LectureMate <span class="ai">AI</span></a>
+  <div class="top-right"><span class="status-dot"></span><span id="apiStatus">Checking AI service…</span></div>
+</header>
+<main class="shell">
+  <section class="hero">
+    <div class="eyebrow">YOUR PERSONAL AI STUDY PARTNER</div>
+    <h1>Understand more.<br><span>Write notes less.</span></h1>
+    <p>Turn recorded and live lectures into clear, structured study notes — with multi-modal and multilingual support.</p>
+    <div class="hero-tags"><span>✦ AI-powered notes</span><span>◉ Live transcription</span><span>文 Multilingual</span></div>
+  </section>
+
+  <nav class="tabs" aria-label="Lecture modes">
+    <button class="tab active" data-tab="recorded">▶ Recorded lectures</button>
+    <button class="tab" data-tab="live">◉ Live lectures</button>
+  </nav>
+
+  <section id="recorded" class="mode-panel">
+    <div class="section-heading"><div><h2>Recorded lecture studio</h2><p>Use a YouTube caption track, upload audio, or paste an existing transcript.</p></div><span class="step-pill">01 / INPUT</span></div>
+    <div class="input-grid">
+      <article class="card">
+        <div class="card-title"><span class="icon purple">▶</span><div><h3>YouTube lecture</h3><p>Retrieve available captions</p></div></div>
+        <label for="youtubeUrl">YouTube video URL</label>
+        <input id="youtubeUrl" type="url" placeholder="https://www.youtube.com/watch?v=…">
+        <button id="youtubeBtn" class="btn secondary full">Get transcript <span>→</span></button>
+      </article>
+      <article class="card">
+        <div class="card-title"><span class="icon blue">♫</span><div><h3>Upload lecture audio</h3><p>MP3, WAV, M4A and supported formats</p></div></div>
+        <label for="audioFile">Audio file (demo limit: 18 MB)</label>
+        <input id="audioFile" type="file" accept="audio/*">
+        <button id="audioBtn" class="btn secondary full">Transcribe audio <span>→</span></button>
+      </article>
+    </div>
+    <article class="card transcript-card">
+      <div class="card-title"><span class="icon mint">≡</span><div><h3>Lecture transcript</h3><p>Review or edit the text before generating notes.</p></div></div>
+      <label for="subject">Subject / module name (optional)</label>
+      <input id="subject" placeholder="e.g., Natural Language Processing — Unit 3">
+      <label for="recordedTranscript">Transcript text</label>
+      <textarea id="recordedTranscript" rows="7" placeholder="Transcript appears here. You can also paste lecture text directly…"></textarea>
+      <div class="form-row">
+        <div><label for="language">Notes language</label><select id="language"><option>English</option><option>Telugu</option><option>Hindi</option><option>Tamil</option><option>Kannada</option><option>Malayalam</option></select></div>
+        <div><label for="detail">Notes length</label><select id="detail"><option>Detailed</option><option>Concise</option></select></div>
+      </div>
+      <button id="recordedNotesBtn" class="btn primary full">✦ Generate smart notes</button>
+    </article>
+  </section>
+
+  <section id="live" class="mode-panel hidden">
+    <div class="section-heading"><div><h2>Live lecture companion</h2><p>Capture speech from your microphone, then turn the transcript into notes.</p></div><span class="step-pill">02 / LIVE</span></div>
+    <article class="card live-card">
+      <div class="live-visual"><div class="mic-orb">🎙</div><div><div id="liveState" class="live-state">Ready when you are</div><p id="liveHint">Allow microphone access when your browser asks.</p></div></div>
+      <div class="live-controls"><button id="startLive" class="btn primary">● Start listening</button><button id="stopLive" class="btn danger" disabled>■ Stop listening</button><button id="clearLive" class="btn secondary">Clear</button></div>
+      <p class="privacy-note">Microphone transcription uses your browser's speech-recognition support where available. Availability varies by browser and language. Use only with permission from the lecturer/class.</p>
+      <label for="liveTranscript">Live transcript (editable)</label>
+      <textarea id="liveTranscript" rows="10" placeholder="Your recognized speech will appear here… You can also paste a transcript if live recognition is unavailable."></textarea>
+      <div class="form-row">
+        <div><label for="liveSubject">Subject / module name</label><input id="liveSubject" placeholder="e.g., Machine Learning"></div>
+        <div><label for="liveLanguage">Notes language</label><select id="liveLanguage"><option>English</option><option>Telugu</option><option>Hindi</option><option>Tamil</option><option>Kannada</option><option>Malayalam</option></select></div>
+      </div>
+      <button id="liveNotesBtn" class="btn primary full">✦ Generate notes from live lecture</button>
+    </article>
+  </section>
+
+  <section id="results" class="results hidden">
+    <div class="section-heading"><div><h2>Your smart notes</h2><p>Generated from the transcript provided above. Review important facts before exams.</p></div><span class="step-pill">03 / OUTPUT</span></div>
+    <article class="card notes-card">
+      <div class="notes-toolbar"><span class="output-label">✦ AI-GENERATED STUDY NOTES</span><div><button id="copyBtn" class="btn small secondary">Copy</button><button id="downloadBtn" class="btn small secondary">Download .md</button></div></div>
+      <div id="notesOutput" class="notes-output"></div>
+      <p class="accuracy-note">Accuracy note: AI can make mistakes. Compare formulas, names and numbers with the original lecture or slides.</p>
+    </article>
+  </section>
+  <div id="message" class="message hidden" role="status"></div>
+  <footer><div class="footer-brand">✦ LectureMate AI</div><p>Smart Interactive Lecture Companion & Automated Notes Generator using Multi-Modal Collaboration</p><span>Student project prototype · Recorded + live learning</span></footer>
+</main>
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
