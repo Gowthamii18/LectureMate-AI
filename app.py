@@ -90,7 +90,7 @@ def youtube_transcript():
 
     except HTTPError as exc:
     details = exc.read().decode("utf-8", errors="replace")
-    return jsonify({
+        return jsonify({
         "error": f"Transcript API HTTP {exc.code}: {details[:500]}"
     }), 502
     except (URLError, TimeoutError) as exc:
