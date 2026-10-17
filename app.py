@@ -87,12 +87,13 @@ def youtube_transcript():
             "transcript": transcript,
             "video_id": video_id
         })
-
+        
     except HTTPError as exc:
-    details = exc.read().decode("utf-8", errors="replace")
+        details = exc.read().decode("utf-8", errors="replace")
         return jsonify({
-        "error": f"Transcript API HTTP {exc.code}: {details[:500]}"
-    }), 502
+            "error": f"Transcript API HTTP {exc.code}: {details[:500]}"
+        }), 502
+        
     except (URLError, TimeoutError) as exc:
         return jsonify({
             "error": f"Could not connect to transcript service: {exc}"
