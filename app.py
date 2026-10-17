@@ -43,9 +43,63 @@ def home():
 @app.get("/api/health")
 def health():
     return jsonify({"ok": True, "ai_configured": bool(GEMINI_API_KEY)})
-
+    
 @app.post("/api/youtube-transcript")
 def youtube_transcript():
+    import os
+    import json
+    from urllib.request import Request, urlopen
+    from urllib.parse import urlencode
+    from urllib.error import HTTPError, URLError
+
+    url = (request.json or {}).get("url", "").strip()
+    video_id = extract_video_id(url)
+
+    if not video_id:
+        return jsonify({"error": "Please enter a valid YouTube video URL."}), 400
+
+    api_key = os.environ.get("YOUTUBE_TRANSCRIPT_API_KEY")
+    if not api_key:
+        return jsonify({"error": "YouTube transcript API key is not configured in Render."}), 500
+
+    try:
+        api_url = (
+            "https://getyoutubetranscript.com/api/v1/transcript?"
+            + urlencode({"v": video_id, "language": "en"})
+        )
+
+        req = Request(
+            api_url,
+            headers={"Authorization": f"Bearer {api_key}"},
+            method="GET",
+        )
+
+        with urlopen(req, timeout=30) as response:
+            result = json.loads(response.read().decode("utf-8"))
+
+        data = result.get("data", {})
+        transcript = data.get("transcript", "")
+
+        if not transcript.strip():
+            return jsonify({"error": "No transcript was returned for this video."}), 400
+
+        return jsonify({
+            "transcript": transcript,
+            "video_id": video_id
+        })
+
+    except HTTPError as exc:
+        return jsonify({
+            "error": f"Transcript API returned HTTP {exc.code}. Check your API key, credits, or video captions."
+        }), 502
+    except (URLError, TimeoutError) as exc:
+        return jsonify({
+            "error": f"Could not connect to transcript service: {exc}"
+        }), 502
+    except Exception as exc:
+        return jsonify({"error": f"Transcript retrieval failed: {exc}"}), 502
+        
+    
     url = (request.json or {}).get("url", "").strip()
     video_id = extract_video_id(url)
     if not video_id:
