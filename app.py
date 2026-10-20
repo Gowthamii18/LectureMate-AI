@@ -44,23 +44,74 @@ def home():
 def health():
     return jsonify({"ok": True, "ai_configured": bool(GEMINI_API_KEY)})
     
+
 @app.post("/api/youtube-transcript")
 def youtube_transcript():
     import os
-    import json
-    from urllib.request import Request, urlopen
-    from urllib.parse import urlencode
-    from urllib.error import HTTPError, URLError
+    import requests
 
     url = (request.json or {}).get("url", "").strip()
     video_id = extract_video_id(url)
 
     if not video_id:
-        return jsonify({"error": "Please enter a valid YouTube video URL."}), 400
+        return jsonify({"error": "Please enter a valid YouTube URL."}), 400
 
     api_key = os.environ.get("YOUTUBE_TRANSCRIPT_API_KEY")
     if not api_key:
-        return jsonify({"error": "YouTube transcript API key is not configured in Render."}), 500
+        return jsonify({"error": "YouTube transcript API key is missing in Render."}), 500
+
+    try:
+        response = requests.post(
+            "https://www.youtubetranscript.dev/api/v2/transcribe",
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "video": video_id,
+                "mode": "auto",
+                "language": "en",
+                "format": {"timestamp": False, "paragraphs": False},
+            },
+            timeout=45,
+        )
+
+        if response.status_code not in (200, 202):
+            return jsonify({
+                "error": f"YouTube transcript provider returned HTTP {response.status_code}: {response.text[:300]}"
+            }), 502
+
+        result = response.json()
+        status = result.get("status", "")
+        data = result.get("data") or {}
+        transcript_data = data.get("transcript") or {}
+        transcript = transcript_data.get("text", "")
+
+        if status == "completed" and transcript.strip():
+            return jsonify({
+                "transcript": transcript,
+                "video_id": video_id,
+            })
+
+        if status == "processing":
+            return jsonify({
+                "error": "This video is being transcribed. Please try again in a little while."
+            }), 202
+
+        if status == "requires_asr_confirmation":
+            return jsonify({
+                "error": "Captions are unavailable. This video needs speech-to-text confirmation."
+            }), 400
+
+        return jsonify({
+            "error": result.get("error") or "No transcript was returned. Check the video's captions and API credits."
+        }), 502
+
+    except requests.RequestException as exc:
+        return jsonify({"error": f"Could not contact transcript provider: {exc}"}), 502
+    except ValueError:
+        return jsonify({"error": "The transcript provider returned an invalid response."}), 502
+
 
     try:
         api_url = (
