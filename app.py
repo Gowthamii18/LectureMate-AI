@@ -70,7 +70,7 @@ def youtube_transcript():
 
         req = Request(
             api_url,
-            headers={"Authorization": f"Bearer {api_key}"},
+            headers={"x-api-key": api_key},
             method="GET",
         )
 
