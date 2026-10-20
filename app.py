@@ -45,28 +45,31 @@ def health():
     return jsonify({"ok": True, "ai_configured": bool(GEMINI_API_KEY)})
     
 
+
 @app.post("/api/youtube-transcript")
 def youtube_transcript():
-    import os
-    import requests
+    import time
 
-    url = (request.json or {}).get("url", "").strip()
-    video_id = extract_video_id(url)
+    payload = request.get_json(silent=True) or {}
+    video_id = extract_video_id(str(payload.get("url", "")).strip())
 
     if not video_id:
         return jsonify({"error": "Please enter a valid YouTube URL."}), 400
 
-    api_key = os.environ.get("YOUTUBE_TRANSCRIPT_API_KEY")
+    api_key = os.getenv("YOUTUBE_TRANSCRIPT_API_KEY", "").strip()
     if not api_key:
-        return jsonify({"error": "YouTube transcript API key is missing in Render."}), 500
+        return jsonify({"error": "Add YOUTUBE_TRANSCRIPT_API_KEY in Render Environment."}), 500
+
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    }
 
     try:
         response = requests.post(
             "https://www.youtubetranscript.dev/api/v2/transcribe",
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-            },
+            headers=headers,
             json={
                 "video": video_id,
                 "mode": "auto",
@@ -76,96 +79,68 @@ def youtube_transcript():
             timeout=45,
         )
 
+        if response.status_code == 401:
+            return jsonify({
+                "error": "API key rejected (401). Verify the key on YouTubeTranscript.dev's API Keys page and update it in Render."
+            }), 502
+
+        if response.status_code == 402:
+            return jsonify({
+                "error": "Transcript API credits are insufficient. Check your provider account."
+            }), 502
+
         if response.status_code not in (200, 202):
             return jsonify({
-                "error": f"YouTube transcript provider returned HTTP {response.status_code}: {response.text[:300]}"
+                "error": f"Transcript provider HTTP {response.status_code}: {response.text[:250]}"
             }), 502
 
         result = response.json()
         status = result.get("status", "")
         data = result.get("data") or {}
-        transcript_data = data.get("transcript") or {}
-        transcript = transcript_data.get("text", "")
+        transcript = ((data.get("transcript") or {}).get("text") or "").strip()
 
-        if status == "completed" and transcript.strip():
-            return jsonify({
-                "transcript": transcript,
-                "video_id": video_id,
-            })
+        if status == "completed" and transcript:
+            return jsonify({"transcript": transcript, "video_id": video_id})
 
-        if status == "processing":
+        job_id = result.get("job_id")
+        if status == "processing" and job_id:
+            for _ in range(8):
+                time.sleep(2)
+                job_response = requests.get(
+                    f"https://www.youtubetranscript.dev/api/v2/jobs/{job_id}",
+                    headers={"Authorization": f"Bearer {api_key}"},
+                    timeout=20,
+                )
+                if job_response.status_code not in (200, 202):
+                    break
+
+                job = job_response.json()
+                job_data = job.get("data") or {}
+                transcript = ((job_data.get("transcript") or {}).get("text") or "").strip()
+
+                if job.get("status") == "completed" and transcript:
+                    return jsonify({"transcript": transcript, "video_id": video_id})
+
+                if job.get("status") in ("failed", "requires_asr_confirmation"):
+                    return jsonify({
+                        "error": job.get("error") or "The provider could not transcribe this video."
+                    }), 502
+
             return jsonify({
-                "error": "This video is being transcribed. Please try again in a little while."
+                "error": "Transcription is still processing. Please wait and try the URL again."
             }), 202
 
-        if status == "requires_asr_confirmation":
-            return jsonify({
-                "error": "Captions are unavailable. This video needs speech-to-text confirmation."
-            }), 400
-
         return jsonify({
-            "error": result.get("error") or "No transcript was returned. Check the video's captions and API credits."
+            "error": result.get("error") or "No transcript returned. Check the video's captions and API credits."
         }), 502
 
+    except requests.Timeout:
+        return jsonify({"error": "Transcript provider timed out. Please retry."}), 504
     except requests.RequestException as exc:
         return jsonify({"error": f"Could not contact transcript provider: {exc}"}), 502
     except ValueError:
-        return jsonify({"error": "The transcript provider returned an invalid response."}), 502
+        return jsonify({"error": "Transcript provider returned invalid JSON."}), 502
 
-
-    try:
-        api_url = (
-            "https://getyoutubetranscript.com/api/v1/transcript?"
-            + urlencode({"v": video_id, "language": "en"})
-        )
-
-        req = Request(
-            api_url,
-            headers={"x-api-key": api_key},
-            method="GET",
-        )
-
-        with urlopen(req, timeout=30) as response:
-            result = json.loads(response.read().decode("utf-8"))
-
-        data = result.get("data", {})
-        transcript = data.get("transcript", "")
-
-        if not transcript.strip():
-            return jsonify({"error": "No transcript was returned for this video."}), 400
-
-        return jsonify({
-            "transcript": transcript,
-            "video_id": video_id
-        })
-        
-    except HTTPError as exc:
-        details = exc.read().decode("utf-8", errors="replace")
-        return jsonify({
-            "error": f"Transcript API HTTP {exc.code}: {details[:500]}"
-        }), 502
-        
-    except (URLError, TimeoutError) as exc:
-        return jsonify({
-            "error": f"Could not connect to transcript service: {exc}"
-        }), 502
-    except Exception as exc:
-        return jsonify({"error": f"Transcript retrieval failed: {exc}"}), 502
-        
-    
-    url = (request.json or {}).get("url", "").strip()
-    video_id = extract_video_id(url)
-    if not video_id:
-        return jsonify({"error": "Please enter a valid YouTube video URL."}), 400
-    try:
-        from youtube_transcript_api import YouTubeTranscriptApi
-        transcript = YouTubeTranscriptApi().fetch(video_id)
-        text = " ".join(getattr(item, "text", str(item)) for item in transcript)
-        if not text.strip():
-            raise RuntimeError("No transcript text was returned.")
-        return jsonify({"transcript": text, "video_id": video_id})
-    except Exception as exc:
-        return jsonify({"error": "Could not retrieve captions for this video. The video may not have captions, or YouTube may restrict access. Try uploading its audio or paste a transcript. Details: " + str(exc)[:250]}), 400
 
 @app.post("/api/transcribe-audio")
 def transcribe_audio():
